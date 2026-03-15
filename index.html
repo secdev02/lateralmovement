@@ -1,0 +1,1352 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lateral Movement Modeler</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;700&family=Google+Sans+Mono&display=swap');
+
+:root {
+–bg:           #f8f9fa;
+–surface:      #ffffff;
+–surface2:     #f1f3f4;
+–border:       #dadce0;
+–border-focus: #1a73e8;
+
+```
+--text-primary:   #202124;
+--text-secondary: #5f6368;
+--text-hint:      #9aa0a6;
+
+--blue:    #1a73e8;
+--red:     #d93025;
+--green:   #188038;
+--yellow:  #f29900;
+--orange:  #e8710a;
+
+/* protocol colours — vivid but readable on white */
+--rdp:   #8430ce;
+--smb:   #e8710a;
+--wmi:   #0097a7;
+--https: #188038;
+--ssh:   #c5960c;
+
+--shadow-sm:  0 1px 3px rgba(60,64,67,.15), 0 1px 2px rgba(60,64,67,.1);
+--shadow-md:  0 2px 6px 2px rgba(60,64,67,.15);
+--radius:     8px;
+--radius-sm:  4px;
+```
+
+}
+
+- { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+background: var(–bg);
+color: var(–text-primary);
+font-family: ‘Google Sans’, ‘Segoe UI’, sans-serif;
+font-size: 13px;
+display: flex;
+height: 100vh;
+overflow: hidden;
+}
+
+/* ── Sidebar ── */
+#sidebar {
+width: 272px;
+min-width: 272px;
+background: var(–surface);
+border-right: 1px solid var(–border);
+display: flex;
+flex-direction: column;
+overflow-y: auto;
+overflow-x: hidden;
+}
+
+#sidebar::-webkit-scrollbar { width: 6px; }
+#sidebar::-webkit-scrollbar-track { background: transparent; }
+#sidebar::-webkit-scrollbar-thumb { background: var(–border); border-radius: 3px; }
+
+.sidebar-header {
+padding: 20px 16px 16px;
+border-bottom: 1px solid var(–border);
+}
+
+.sidebar-header h1 {
+font-size: 15px;
+font-weight: 700;
+color: var(–text-primary);
+letter-spacing: 0;
+line-height: 1.3;
+}
+
+.sidebar-header h1 span {
+color: var(–blue);
+}
+
+.sidebar-header p {
+font-size: 11px;
+color: var(–text-hint);
+margin-top: 3px;
+}
+
+.section {
+padding: 16px;
+border-bottom: 1px solid var(–border);
+}
+
+.section-title {
+font-size: 10px;
+font-weight: 700;
+color: var(–text-hint);
+letter-spacing: 0.8px;
+text-transform: uppercase;
+margin-bottom: 12px;
+}
+
+label {
+display: block;
+font-size: 11px;
+font-weight: 500;
+color: var(–text-secondary);
+margin-bottom: 5px;
+}
+
+input[type=“number”] {
+width: 100%;
+background: var(–surface);
+border: 1px solid var(–border);
+border-radius: var(–radius-sm);
+color: var(–text-primary);
+font-family: inherit;
+font-size: 13px;
+padding: 7px 10px;
+margin-bottom: 12px;
+outline: none;
+transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+input[type=“number”]:focus {
+border-color: var(–border-focus);
+box-shadow: 0 0 0 2px rgba(26,115,232,.2);
+}
+
+input[type=“range”] {
+-webkit-appearance: none;
+width: 100%;
+height: 4px;
+background: var(–border);
+border-radius: 2px;
+cursor: pointer;
+accent-color: var(–blue);
+border: none;
+padding: 0;
+margin-bottom: 0;
+outline: none;
+}
+
+.protocol-grid {
+display: grid;
+grid-template-columns: 1fr 1fr;
+gap: 6px;
+}
+
+.proto-btn {
+background: var(–surface2);
+border: 1.5px solid var(–border);
+border-radius: var(–radius-sm);
+color: var(–text-secondary);
+font-family: inherit;
+font-size: 12px;
+font-weight: 500;
+padding: 7px 6px;
+cursor: pointer;
+text-align: center;
+transition: all 0.15s;
+display: flex;
+align-items: center;
+justify-content: center;
+gap: 5px;
+}
+
+.proto-btn:hover { background: #e8f0fe; border-color: #a8c7fa; color: var(–blue); }
+
+.proto-btn.active { color: #fff; font-weight: 600; }
+.proto-btn[data-proto=“RDP”].active  { background: var(–rdp);   border-color: var(–rdp); }
+.proto-btn[data-proto=“SMB”].active  { background: var(–smb);   border-color: var(–smb); }
+.proto-btn[data-proto=“WMI”].active  { background: var(–wmi);   border-color: var(–wmi); }
+.proto-btn[data-proto=“HTTPS”].active{ background: var(–https); border-color: var(–https); }
+.proto-btn[data-proto=“SSH”].active  { background: var(–ssh);   border-color: var(–ssh); }
+
+.proto-dot {
+display: inline-block;
+width: 7px; height: 7px;
+border-radius: 50%;
+flex-shrink: 0;
+}
+
+.proto-btn.active .proto-dot { background: rgba(255,255,255,0.6) !important; }
+
+.speed-row { display: flex; align-items: center; gap: 10px; }
+.speed-row span {
+font-size: 12px;
+font-weight: 600;
+color: var(–blue);
+min-width: 36px;
+text-align: right;
+}
+
+/* ── Buttons ── */
+.btn {
+width: 100%;
+border: none;
+border-radius: var(–radius-sm);
+font-family: inherit;
+font-size: 12px;
+font-weight: 600;
+letter-spacing: 0.2px;
+padding: 8px 12px;
+cursor: pointer;
+transition: background 0.15s, box-shadow 0.15s;
+margin-bottom: 6px;
+display: block;
+}
+
+.btn-primary  { background: var(–blue);   color: #fff; }
+.btn-primary:hover  { background: #1765cc; box-shadow: var(–shadow-sm); }
+
+.btn-danger   { background: var(–red);    color: #fff; }
+.btn-danger:hover   { background: #b31412; box-shadow: var(–shadow-sm); }
+
+.btn-warn     { background: var(–yellow); color: #fff; }
+.btn-warn:hover     { background: #d08000; box-shadow: var(–shadow-sm); }
+
+.btn-green    { background: var(–green);  color: #fff; }
+.btn-green:hover    { background: #146c2e; box-shadow: var(–shadow-sm); }
+
+.btn-muted    { background: var(–surface2); color: var(–text-secondary); border: 1px solid var(–border); }
+.btn-muted:hover    { background: #e8eaed; }
+
+.btn:disabled { opacity: 0.4; cursor: not-allowed; box-shadow: none; }
+
+/* ── Stats ── */
+.stats-grid {
+display: grid;
+grid-template-columns: 1fr 1fr;
+gap: 8px;
+}
+
+.stat-box {
+background: var(–surface2);
+border-radius: var(–radius-sm);
+padding: 10px 8px;
+text-align: center;
+}
+
+.stat-val {
+font-size: 22px;
+font-weight: 700;
+color: var(–text-primary);
+line-height: 1;
+}
+
+.stat-label {
+font-size: 9px;
+font-weight: 600;
+color: var(–text-hint);
+letter-spacing: 0.5px;
+text-transform: uppercase;
+margin-top: 4px;
+}
+
+.stat-val.danger { color: var(–red); }
+.stat-val.canary { color: var(–yellow); }
+.stat-val.accent { color: var(–blue); }
+
+/* ── Log ── */
+#log {
+overflow-y: auto;
+padding: 8px 12px;
+font-family: ‘Google Sans Mono’, ‘Roboto Mono’, monospace;
+font-size: 10px;
+line-height: 1.8;
+color: var(–text-secondary);
+min-height: 100px;
+max-height: 200px;
+background: var(–surface2);
+border-radius: var(–radius-sm);
+}
+
+#log::-webkit-scrollbar { width: 4px; }
+#log::-webkit-scrollbar-thumb { background: var(–border); border-radius: 2px; }
+
+.log-entry { }
+.log-entry.alert      { color: var(–yellow); font-weight: 600; }
+.log-entry.compromised{ color: var(–red); }
+.log-entry.info       { color: var(–blue); }
+.log-entry.move       { color: var(–text-secondary); }
+
+/* ── Main area ── */
+#main {
+flex: 1;
+display: flex;
+flex-direction: column;
+overflow: hidden;
+}
+
+#topbar {
+height: 44px;
+background: var(–surface);
+border-bottom: 1px solid var(–border);
+display: flex;
+align-items: center;
+padding: 0 20px;
+gap: 18px;
+}
+
+.topbar-item {
+display: flex;
+align-items: center;
+gap: 6px;
+font-size: 11px;
+font-weight: 500;
+color: var(–text-secondary);
+}
+
+.legend-dot {
+width: 10px; height: 10px;
+border-radius: 50%;
+flex-shrink: 0;
+}
+
+.topbar-sep {
+width: 1px;
+height: 20px;
+background: var(–border);
+}
+
+#canvas-wrap {
+flex: 1;
+position: relative;
+overflow: hidden;
+background: var(–bg);
+}
+
+svg {
+width: 100%;
+height: 100%;
+}
+
+.node circle {
+stroke-width: 2;
+cursor: pointer;
+transition: filter 0.15s;
+}
+
+.node circle:hover { filter: brightness(0.88); }
+
+.node text {
+font-family: ‘Google Sans’, sans-serif;
+font-size: 10px;
+font-weight: 600;
+fill: var(–text-primary);
+text-anchor: middle;
+dominant-baseline: middle;
+pointer-events: none;
+user-select: none;
+}
+
+.link {
+stroke-opacity: 0.5;
+stroke-width: 1.5;
+fill: none;
+}
+
+.link-packet { pointer-events: none; }
+
+.attacker-ring {
+fill: none;
+stroke: var(–red);
+stroke-width: 1.5;
+opacity: 0.6;
+animation: pulse-ring 1.6s ease-out infinite;
+}
+
+@keyframes pulse-ring {
+0%   { r: 16px; opacity: 0.7; }
+100% { r: 28px; opacity: 0;   }
+}
+
+@keyframes blink { 50% { opacity: 0.35; } }
+
+#status-bar {
+height: 32px;
+background: var(–surface);
+border-top: 1px solid var(–border);
+display: flex;
+align-items: center;
+padding: 0 20px;
+gap: 16px;
+}
+
+#status-phase {
+font-size: 11px;
+font-weight: 700;
+color: var(–blue);
+text-transform: uppercase;
+letter-spacing: 0.5px;
+}
+
+#status-step {
+font-size: 11px;
+color: var(–text-secondary);
+}
+
+/* ── Replay ── */
+.replay-controls { display: flex; gap: 6px; }
+.replay-controls .btn { width: auto; padding: 6px 12px; margin-bottom: 0; font-size: 11px; }
+
+/* ── Saves ── */
+.saves-list { max-height: 120px; overflow-y: auto; margin-top: 8px; }
+.saves-list::-webkit-scrollbar { width: 4px; }
+.saves-list::-webkit-scrollbar-thumb { background: var(–border); border-radius: 2px; }
+
+.save-entry {
+display: flex;
+align-items: center;
+justify-content: space-between;
+padding: 7px 10px;
+background: var(–surface2);
+border-radius: var(–radius-sm);
+margin-bottom: 5px;
+font-size: 11px;
+cursor: pointer;
+border: 1px solid transparent;
+transition: border-color 0.15s, background 0.15s;
+}
+
+.save-entry:hover { background: #e8f0fe; border-color: #a8c7fa; }
+
+.save-entry .save-del {
+color: var(–text-hint);
+cursor: pointer;
+font-size: 14px;
+line-height: 1;
+padding: 0 3px;
+transition: color 0.1s;
+}
+.save-entry .save-del:hover { color: var(–red); }
+
+/* ── Tags ── */
+.tag {
+display: inline-flex;
+align-items: center;
+font-size: 10px;
+font-weight: 600;
+padding: 2px 8px;
+border-radius: 12px;
+letter-spacing: 0.2px;
+}
+
+.tag-replay { background: #e6f4ea; color: var(–green); }
+.tag-live   { background: #fce8e6; color: var(–red); animation: blink 1s step-end infinite; }
+
+/* ── Tooltip ── */
+.tooltip {
+position: absolute;
+background: var(–surface);
+border: 1px solid var(–border);
+border-radius: var(–radius);
+padding: 10px 12px;
+font-size: 12px;
+pointer-events: none;
+opacity: 0;
+transition: opacity 0.12s;
+z-index: 100;
+max-width: 180px;
+line-height: 1.6;
+box-shadow: var(–shadow-md);
+color: var(–text-primary);
+}
+
+.tooltip.visible { opacity: 1; }
+.tooltip strong {
+display: block;
+font-size: 11px;
+font-weight: 700;
+color: var(–blue);
+margin-bottom: 4px;
+text-transform: uppercase;
+letter-spacing: 0.3px;
+}
+</style>
+
+</head>
+<body>
+
+<div id="sidebar">
+  <div class="sidebar-header">
+    <h1>Lateral Movement <span style="color:#1a73e8">Modeler</span></h1>
+    <p>Adversary simulation &amp; canary detection</p>
+  </div>
+
+  <!-- Setup -->
+
+  <div class="section" id="setup-section">
+    <div class="section-title">Network Config</div>
+    <label>Host Nodes</label>
+    <input type="number" id="num-nodes" value="12" min="3" max="40">
+    <label>Thinkst Canaries</label>
+    <input type="number" id="num-canaries" value="2" min="0" max="10">
+  </div>
+
+  <!-- Protocol -->
+
+  <div class="section">
+    <div class="section-title">Movement Protocol</div>
+    <div class="protocol-grid">
+      <button class="proto-btn active" data-proto="RDP">
+        <span class="proto-dot" style="background:var(--rdp)"></span>RDP
+      </button>
+      <button class="proto-btn active" data-proto="SMB">
+        <span class="proto-dot" style="background:var(--smb)"></span>SMB
+      </button>
+      <button class="proto-btn active" data-proto="WMI">
+        <span class="proto-dot" style="background:var(--wmi)"></span>WMI
+      </button>
+      <button class="proto-btn active" data-proto="HTTPS">
+        <span class="proto-dot" style="background:var(--https)"></span>HTTPS
+      </button>
+      <button class="proto-btn active" data-proto="SSH" style="grid-column: span 2">
+        <span class="proto-dot" style="background:var(--ssh)"></span>SSH
+      </button>
+    </div>
+  </div>
+
+  <!-- Speed -->
+
+  <div class="section">
+    <div class="section-title">Attack Speed</div>
+    <label>Step Delay (ms)</label>
+    <div class="speed-row">
+      <input type="range" id="speed" min="300" max="3000" value="1000" step="100" style="flex:1">
+      <span id="speed-val">1000</span>
+    </div>
+  </div>
+
+  <!-- Controls -->
+
+  <div class="section">
+    <div class="section-title">Simulation</div>
+    <button class="btn btn-primary" id="btn-build">Build Network</button>
+    <button class="btn btn-danger" id="btn-start" disabled>Start Attack</button>
+    <button class="btn btn-muted" id="btn-reset" disabled>Reset</button>
+  </div>
+
+  <!-- Stats -->
+
+  <div class="section">
+    <div class="section-title">Telemetry</div>
+    <div class="stats-grid">
+      <div class="stat-box">
+        <div class="stat-val" id="stat-comp">0</div>
+        <div class="stat-label">Compromised</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-val canary" id="stat-canary">0</div>
+        <div class="stat-label">Canary Hits</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-val accent" id="stat-moves">0</div>
+        <div class="stat-label">Moves</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-val" id="stat-remain">0</div>
+        <div class="stat-label">Safe</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Save / Load -->
+
+  <div class="section">
+    <div class="section-title">Sessions</div>
+    <button class="btn btn-green" id="btn-save" disabled>Save Session</button>
+    <div class="saves-list" id="saves-list"></div>
+  </div>
+
+  <!-- Replay -->
+
+  <div class="section" id="replay-section" style="display:none">
+    <div class="section-title">Replay Controls</div>
+    <div class="replay-controls">
+      <button class="btn btn-warn" id="btn-replay-play">▶ Play</button>
+      <button class="btn btn-muted" id="btn-replay-step">Step</button>
+      <button class="btn btn-muted" id="btn-replay-stop">■ Stop</button>
+    </div>
+  </div>
+
+  <!-- Log -->
+
+  <div class="section" style="border-bottom:none; flex:1; display:flex; flex-direction:column; padding-bottom:0">
+    <div class="section-title">Event Log</div>
+    <div id="log"></div>
+  </div>
+</div>
+
+<div id="main">
+  <div id="topbar">
+    <div class="topbar-item">
+      <div class="legend-dot" style="background:var(--danger)"></div> ATTACKER
+    </div>
+    <div class="topbar-item">
+      <div class="legend-dot" style="background:#1e8a5a"></div> HOST
+    </div>
+    <div class="topbar-item">
+      <div class="legend-dot" style="background:var(--canary)"></div> CANARY
+    </div>
+    <div class="topbar-item">
+      <div class="legend-dot" style="background:var(--compromised)"></div> COMPROMISED
+    </div>
+    <div style="margin-left:auto; display:flex; gap:12px; align-items:center">
+      <span style="font-size:9px; color:#9aa0a6">Protocols:</span>
+      <span class="topbar-item"><div class="legend-dot" style="background:var(--rdp)"></div>RDP</span>
+      <span class="topbar-item"><div class="legend-dot" style="background:var(--smb)"></div>SMB</span>
+      <span class="topbar-item"><div class="legend-dot" style="background:var(--wmi)"></div>WMI</span>
+      <span class="topbar-item"><div class="legend-dot" style="background:var(--https)"></div>HTTPS</span>
+      <span class="topbar-item"><div class="legend-dot" style="background:var(--ssh)"></div>SSH</span>
+      <div id="mode-tag"></div>
+    </div>
+  </div>
+
+  <div id="canvas-wrap">
+    <svg id="svg"></svg>
+    <div class="tooltip" id="tooltip"></div>
+  </div>
+
+  <div id="status-bar">
+    <span id="status-phase">IDLE</span>
+    <span id="status-step"></span>
+    <span id="status-proto" style="margin-left:auto; font-size:11px; color:#9aa0a6"></span>
+  </div>
+</div>
+
+<script>
+// ─── State ───────────────────────────────────────────────────────────────────
+const PROTO_COLORS = { RDP:'#e040fb', SMB:'#ff6d00', WMI:'#00e5ff', HTTPS:'#76ff03', SSH:'#ffd740' };
+
+let nodes = [], links = [], simulation = null;
+let attackerNode = null;
+let sessionEvents = [];   // recorded events
+let replayEvents = [];
+let replayIdx = 0;
+let replayTimer = null;
+let isRunning = false;
+let isReplay = false;
+let attackTimer = null;
+let compromisedSet = new Set();
+let canaryHitSet = new Set();
+let moveCount = 0;
+let enabledProtos = new Set(['RDP','SMB','WMI','HTTPS','SSH']);
+let saves = JSON.parse(localStorage.getItem('lm_saves') || '[]');
+
+// ─── DOM refs ─────────────────────────────────────────────────────────────────
+const svg = d3.select('#svg');
+const logEl = document.getElementById('log');
+const tooltip = document.getElementById('tooltip');
+const modeTag = document.getElementById('mode-tag');
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+function getSpeed() { return parseInt(document.getElementById('speed').value); }
+
+function activeProtos() {
+  return [...enabledProtos];
+}
+
+function randProto() {
+  const p = activeProtos();
+  return p[Math.floor(Math.random() * p.length)];
+}
+
+function addLog(msg, cls) {
+  const ts = new Date().toLocaleTimeString('en-GB',{hour12:false});
+  const d = document.createElement('div');
+  d.className = 'log-entry ' + (cls||'move');
+  d.textContent = '[' + ts + '] ' + msg;
+  logEl.appendChild(d);
+  logEl.scrollTop = logEl.scrollHeight;
+}
+
+function updateStats() {
+  document.getElementById('stat-comp').textContent = compromisedSet.size;
+  document.getElementById('stat-canary').textContent = canaryHitSet.size;
+  document.getElementById('stat-moves').textContent = moveCount;
+  const safe = nodes.filter(n => !n.isAttacker && !compromisedSet.has(n.id)).length;
+  document.getElementById('stat-remain').textContent = safe;
+
+  const el = document.getElementById('stat-comp');
+  el.className = 'stat-val' + (compromisedSet.size > 0 ? ' danger' : '');
+}
+
+// ─── Protocol buttons ─────────────────────────────────────────────────────────
+document.querySelectorAll('.proto-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const p = btn.dataset.proto;
+    if (enabledProtos.has(p)) {
+      if (enabledProtos.size === 1) return; // keep at least one
+      enabledProtos.delete(p);
+      btn.classList.remove('active');
+    } else {
+      enabledProtos.add(p);
+      btn.classList.add('active');
+    }
+  });
+});
+
+document.getElementById('speed').addEventListener('input', function() {
+  document.getElementById('speed-val').textContent = this.value;
+});
+
+// ─── Build Network ────────────────────────────────────────────────────────────
+document.getElementById('btn-build').addEventListener('click', buildNetwork);
+
+function buildNetwork() {
+  stopAll();
+  isReplay = false;
+  document.getElementById('replay-section').style.display = 'none';
+  modeTag.innerHTML = '';
+
+  const numNodes = Math.max(3, Math.min(40, parseInt(document.getElementById('num-nodes').value) || 12));
+  const numCanaries = Math.max(0, Math.min(numNodes-2, parseInt(document.getElementById('num-canaries').value) || 2));
+
+  compromisedSet.clear();
+  canaryHitSet.clear();
+  moveCount = 0;
+  sessionEvents = [];
+  logEl.innerHTML = '';
+  updateStats();
+
+  // Build nodes
+  nodes = [];
+  // Attacker
+  nodes.push({ id: 'attacker', label: 'ATK', isAttacker: true, isCanary: false, compromised: false });
+
+  // Canaries
+  for (let i = 0; i < numCanaries; i++) {
+    nodes.push({ id: 'canary-' + i, label: 'C' + (i+1), isAttacker: false, isCanary: true, compromised: false });
+  }
+
+  // Hosts
+  for (let i = 0; i < numNodes; i++) {
+    nodes.push({ id: 'host-' + i, label: 'H' + (i+1), isAttacker: false, isCanary: false, compromised: false });
+  }
+
+  // Build links (sparse random graph, each non-attacker connected to ~3 others)
+  links = [];
+  const nonAttacker = nodes.filter(n => !n.isAttacker);
+  // Connect attacker to 2-3 random hosts
+  const atkTargets = d3.shuffle([...nonAttacker]).slice(0, 3);
+  atkTargets.forEach(t => links.push({ source: 'attacker', target: t.id }));
+
+  // Random edges between other nodes
+  for (let i = 0; i < nonAttacker.length; i++) {
+    const degree = 2 + Math.floor(Math.random() * 3);
+    const others = nonAttacker.filter((n,j) => j !== i);
+    d3.shuffle(others).slice(0, degree).forEach(t => {
+      const exists = links.some(l =>
+        (l.source === nonAttacker[i].id && l.target === t.id) ||
+        (l.source === t.id && l.target === nonAttacker[i].id)
+      );
+      if (!exists) links.push({ source: nonAttacker[i].id, target: t.id });
+    });
+  }
+
+  attackerNode = nodes[0];
+  attackerNode.current = true;
+
+  drawGraph();
+  updateStats();
+  addLog('Network built. ' + numNodes + ' hosts, ' + numCanaries + ' canaries.', 'info');
+  addLog('Attacker at entry point. Awaiting execution.', 'info');
+
+  document.getElementById('btn-start').disabled = false;
+  document.getElementById('btn-reset').disabled = false;
+  document.getElementById('btn-save').disabled = true;
+  document.getElementById('status-phase').textContent = 'READY';
+  document.getElementById('status-step').textContent = '';
+}
+
+// ─── Draw Graph ───────────────────────────────────────────────────────────────
+let svgG, linkSel, nodeSel;
+
+function drawGraph() {
+  svg.selectAll('*').remove();
+
+  const W = document.getElementById('canvas-wrap').offsetWidth;
+  const H = document.getElementById('canvas-wrap').offsetHeight;
+
+  // Grid bg
+  const defs = svg.append('defs');
+  const pattern = defs.append('pattern')
+    .attr('id','grid').attr('width',40).attr('height',40)
+    .attr('patternUnits','userSpaceOnUse');
+  pattern.append('path').attr('d','M 40 0 L 0 0 0 40')
+    .attr('fill','none').attr('stroke','#e8eaed').attr('stroke-width','0.8');
+  svg.append('rect').attr('width','100%').attr('height','100%').attr('fill','url(#grid)');
+
+  // Arrow markers
+  Object.entries(PROTO_COLORS).forEach(([proto, color]) => {
+    defs.append('marker')
+      .attr('id', 'arrow-' + proto)
+      .attr('viewBox','0 -4 8 8')
+      .attr('refX', 20).attr('refY', 0)
+      .attr('markerWidth', 5).attr('markerHeight', 5)
+      .attr('orient','auto')
+      .append('path')
+      .attr('d','M0,-4L8,0L0,4')
+      .attr('fill', color);
+  });
+  defs.append('marker')
+    .attr('id','arrow-default')
+    .attr('viewBox','0 -4 8 8')
+    .attr('refX',20).attr('refY',0)
+    .attr('markerWidth',5).attr('markerHeight',5)
+    .attr('orient','auto')
+    .append('path').attr('d','M0,-4L8,0L0,4').attr('fill','#c0c4c9');
+
+  svgG = svg.append('g');
+
+  // Zoom
+  const zoom = d3.zoom().scaleExtent([0.3, 3]).on('zoom', e => svgG.attr('transform', e.transform));
+  svg.call(zoom);
+
+  // Links layer
+  const linkGroup = svgG.append('g').attr('class','links');
+  const nodeGroup = svgG.append('g').attr('class','nodes');
+  const packetGroup = svgG.append('g').attr('class','packets');
+
+  linkSel = linkGroup.selectAll('.link')
+    .data(links).enter().append('line')
+    .attr('class','link')
+    .attr('stroke','#dadce0')
+    .attr('marker-end','url(#arrow-default)');
+
+  nodeSel = nodeGroup.selectAll('.node')
+    .data(nodes).enter().append('g')
+    .attr('class','node')
+    .call(d3.drag()
+      .on('start', dragstarted)
+      .on('drag', dragged)
+      .on('end', dragended))
+    .on('mouseover', showTooltip)
+    .on('mousemove', moveTooltipFn)
+    .on('mouseout', hideTooltip);
+
+  // Attacker ring animation
+  nodeSel.filter(d => d.isAttacker).append('circle')
+    .attr('class','attacker-ring')
+    .attr('r', 18);
+
+  nodeSel.append('circle')
+    .attr('r', d => d.isAttacker ? 16 : (d.isCanary ? 14 : 13))
+    .attr('fill', d => {
+      if (d.isAttacker) return '#fce8e6';
+      if (d.isCanary) return '#fef7e0';
+      return '#e8f0fe';
+    })
+    .attr('stroke', d => {
+      if (d.isAttacker) return '#d93025';
+      if (d.isCanary) return '#f29900';
+      return '#1a73e8';
+    });
+
+  nodeSel.append('text')
+    .text(d => {
+      if (d.isAttacker) return '☠';
+      if (d.isCanary) return '⚠';
+      return d.label;
+    })
+    .attr('font-size', d => d.isAttacker ? '13px' : '10px')
+    .attr('fill', d => {
+      if (d.isAttacker) return '#d93025';
+      if (d.isCanary) return '#b06000';
+      return '#1a73e8';
+    });
+
+  // Force simulation
+  simulation = d3.forceSimulation(nodes)
+    .force('link', d3.forceLink(links).id(d => d.id).distance(90).strength(0.5))
+    .force('charge', d3.forceManyBody().strength(-260))
+    .force('center', d3.forceCenter(W/2, H/2))
+    .force('collision', d3.forceCollide(28))
+    .on('tick', ticked);
+}
+
+function ticked() {
+  if (!linkSel) return;
+  linkSel
+    .attr('x1', d => d.source.x).attr('y1', d => d.source.y)
+    .attr('x2', d => d.target.x).attr('y2', d => d.target.y);
+  nodeSel.attr('transform', d => 'translate(' + d.x + ',' + d.y + ')');
+}
+
+function dragstarted(event, d) {
+  if (!event.active) simulation.alphaTarget(0.3).restart();
+  d.fx = d.x; d.fy = d.y;
+}
+function dragged(event, d) { d.fx = event.x; d.fy = event.y; }
+function dragended(event, d) {
+  if (!event.active) simulation.alphaTarget(0);
+  d.fx = null; d.fy = null;
+}
+
+// ─── Tooltip ─────────────────────────────────────────────────────────────────
+function showTooltip(event, d) {
+  let html = '<strong>' + (d.isAttacker ? 'ATTACKER' : d.isCanary ? 'CANARY: ' + d.label : 'HOST: ' + d.label) + '</strong>';
+  if (d.isAttacker) {
+    html += 'Entry point<br>Moves: ' + moveCount;
+  } else if (d.isCanary) {
+    html += 'Thinkst Canary<br>Status: ' + (canaryHitSet.has(d.id) ? '⚠ TRIGGERED' : 'Active');
+  } else {
+    html += 'Status: ' + (compromisedSet.has(d.id) ? '✗ COMPROMISED' : '✓ Secure');
+    if (d.lastProto) html += '<br>Last: ' + d.lastProto;
+  }
+  tooltip.innerHTML = html;
+  tooltip.classList.add('visible');
+}
+function moveTooltipFn(event) {
+  const wrap = document.getElementById('canvas-wrap').getBoundingClientRect();
+  let x = event.clientX - wrap.left + 12;
+  let y = event.clientY - wrap.top - 10;
+  if (x + 170 > wrap.width) x -= 180;
+  tooltip.style.left = x + 'px';
+  tooltip.style.top = y + 'px';
+}
+function hideTooltip() { tooltip.classList.remove('visible'); }
+
+// ─── Node visual update ───────────────────────────────────────────────────────
+function refreshNodeVisuals() {
+  if (!nodeSel) return;
+  nodeSel.select('circle:not(.attacker-ring)')
+    .attr('fill', d => {
+      if (d.isAttacker) return '#fce8e6';
+      if (d.isCanary) return canaryHitSet.has(d.id) ? '#f9ab00' : '#fef7e0';
+      return compromisedSet.has(d.id) ? '#fce8e6' : '#e8f0fe';
+    })
+    .attr('stroke', d => {
+      if (d.isAttacker) return '#d93025';
+      if (d.isCanary) return canaryHitSet.has(d.id) ? '#e8710a' : '#f29900';
+      if (compromisedSet.has(d.id)) return '#d93025';
+      return d.current ? '#1a73e8' : '#9aa0a6';
+    })
+    .attr('stroke-width', d => d.current ? 3 : 2);
+}
+
+function refreshLinkVisuals() {
+  if (!linkSel) return;
+  linkSel
+    .attr('stroke', d => {
+      const tgt = typeof d.target === 'object' ? d.target.id : d.target;
+      if (d.proto && compromisedSet.has(tgt)) return PROTO_COLORS[d.proto] || '#dadce0';
+      return '#dadce0';
+    })
+    .attr('stroke-opacity', d => d.proto ? 0.8 : 0.6)
+    .attr('marker-end', d => d.proto ? 'url(#arrow-' + d.proto + ')' : 'url(#arrow-default)');
+}
+
+// ─── Packet animation ─────────────────────────────────────────────────────────
+function animatePacket(srcNode, tgtNode, proto, cb) {
+  const color = PROTO_COLORS[proto] || '#fff';
+  const packetGroup = svgG.select('.packets');
+
+  const pkt = packetGroup.append('circle')
+    .attr('class','link-packet')
+    .attr('r', 4)
+    .attr('fill', color)
+    .attr('opacity', 0.9)
+    .attr('cx', srcNode.x).attr('cy', srcNode.y)
+    .style('filter', 'drop-shadow(0 0 4px ' + color + ')');
+
+  pkt.transition().duration(getSpeed() * 0.7)
+    .attr('cx', tgtNode.x).attr('cy', tgtNode.y)
+    .on('end', function() {
+      pkt.remove();
+      if (cb) cb();
+    });
+}
+
+// ─── Attack logic ─────────────────────────────────────────────────────────────
+document.getElementById('btn-start').addEventListener('click', startAttack);
+
+function startAttack() {
+  if (isRunning) return;
+  isRunning = true;
+  isReplay = false;
+  modeTag.innerHTML = '<span class="tag tag-live">● LIVE</span>';
+  document.getElementById('btn-start').disabled = true;
+  document.getElementById('btn-save').disabled = true;
+  document.getElementById('status-phase').textContent = 'ATTACKING';
+
+  // Mark attacker as current
+  nodes.forEach(n => n.current = false);
+  attackerNode.current = true;
+  refreshNodeVisuals();
+
+  addLog('Attack sequence initiated.', 'info');
+  recordEvent({ type: 'start', attackerId: attackerNode.id });
+
+  scheduleNextMove();
+}
+
+function scheduleNextMove() {
+  if (!isRunning) return;
+  attackTimer = setTimeout(doMove, getSpeed());
+}
+
+function doMove() {
+  if (!isRunning) return;
+
+  // Find current attacker position
+  const current = nodes.find(n => n.current && !n.isCanary);
+  if (!current) { endAttack(); return; }
+
+  // Find reachable nodes via links
+  const reachable = getNeighbors(current).filter(n => !compromisedSet.has(n.id) && !n.isAttacker);
+  if (reachable.length === 0) {
+    // Try to jump from any compromised node
+    const allPositions = [current, ...nodes.filter(n => compromisedSet.has(n.id))];
+    let found = null;
+    for (const pos of allPositions) {
+      const r = getNeighbors(pos).filter(n => !compromisedSet.has(n.id) && !n.isAttacker);
+      if (r.length > 0) { found = { from: pos, targets: r }; break; }
+    }
+    if (!found) { endAttack(); return; }
+    // Move attacker perspective
+    nodes.forEach(n => n.current = false);
+    found.from.current = true;
+    refreshNodeVisuals();
+    doMoveFrom(found.from, found.targets);
+    return;
+  }
+
+  doMoveFrom(current, reachable);
+}
+
+function doMoveFrom(fromNode, targets) {
+  const target = targets[Math.floor(Math.random() * targets.length)];
+  const proto = randProto();
+  moveCount++;
+
+  document.getElementById('status-step').textContent =
+    'Step ' + moveCount + ': ' + fromNode.label + ' → ' + target.label + ' via ' + proto;
+  document.getElementById('status-proto').textContent = proto;
+
+  // Mark link
+  const link = links.find(l => {
+    const s = typeof l.source === 'object' ? l.source.id : l.source;
+    const t = typeof l.target === 'object' ? l.target.id : l.target;
+    return (s === fromNode.id && t === target.id) || (s === target.id && t === fromNode.id);
+  });
+  if (link) link.proto = proto;
+
+  animatePacket(fromNode, target, proto, () => {
+    // Check canary
+    if (target.isCanary) {
+      canaryHitSet.add(target.id);
+      target.lastProto = proto;
+      addLog('⚠ CANARY TRIGGERED: ' + target.label + ' via ' + proto + ' — ATTACK HALTED', 'alert');
+      addLog('Attacker detected. Simulation stopped after ' + moveCount + ' move(s).', 'alert');
+      recordEvent({ type: 'canary', fromId: fromNode.id, targetId: target.id, proto: proto, step: moveCount });
+      flashCanary(target);
+      refreshNodeVisuals();
+      refreshLinkVisuals();
+      updateStats();
+      endAttackCanary(target, proto);
+      return;
+    } else {
+      compromisedSet.add(target.id);
+      target.lastProto = proto;
+      nodes.forEach(n => n.current = false);
+      target.current = true;
+      addLog('Host ' + target.label + ' compromised via ' + proto, 'compromised');
+      recordEvent({ type: 'compromise', fromId: fromNode.id, targetId: target.id, proto: proto, step: moveCount });
+    }
+
+    refreshNodeVisuals();
+    refreshLinkVisuals();
+    updateStats();
+
+    // Check win condition
+    const remaining = nodes.filter(n => !n.isAttacker && !n.isCanary && !compromisedSet.has(n.id));
+    if (remaining.length === 0) {
+      endAttack();
+      return;
+    }
+
+    scheduleNextMove();
+  });
+}
+
+function flashCanary(node) {
+  const canaryRing = svgG.select('.nodes').selectAll('.node')
+    .filter(d => d.id === node.id)
+    .append('circle')
+    .attr('r', 12)
+    .attr('fill', 'none')
+    .attr('stroke', '#ffcc00')
+    .attr('stroke-width', 2)
+    .attr('opacity', 1);
+
+  canaryRing.transition().duration(600)
+    .attr('r', 35)
+    .attr('opacity', 0)
+    .on('end', function() { d3.select(this).remove(); });
+}
+
+function getNeighbors(node) {
+  return links.flatMap(l => {
+    const s = typeof l.source === 'object' ? l.source : nodes.find(n => n.id === l.source);
+    const t = typeof l.target === 'object' ? l.target : nodes.find(n => n.id === l.target);
+    if (!s || !t) return [];
+    if (s.id === node.id) return [t];
+    if (t.id === node.id) return [s];
+    return [];
+  });
+}
+
+function endAttack() {
+  isRunning = false;
+  const allHosts = nodes.filter(n => !n.isAttacker && !n.isCanary).length;
+  const pct = Math.round((compromisedSet.size / allHosts) * 100);
+  addLog(
+    'Attack complete. ' + compromisedSet.size + '/' + allHosts + ' hosts (' + pct + '%) compromised. ' +
+    canaryHitSet.size + ' canary(ies) triggered.', 'info'
+  );
+  document.getElementById('status-phase').textContent = 'COMPLETE';
+  document.getElementById('btn-save').disabled = false;
+  recordEvent({ type: 'end' });
+}
+
+function endAttackCanary(canaryNode, proto) {
+  isRunning = false;
+  document.getElementById('status-phase').textContent = '\u26a0 Canary Detected';
+  document.getElementById('btn-save').disabled = false;
+  recordEvent({ type: 'end', reason: 'canary', canaryId: canaryNode.id });
+  modeTag.innerHTML = '<span class="tag" style="background:#fef7e0;color:#b06000;animation:blink 0.6s step-end infinite">\u26a0 Busted</span>';
+
+  // Flash canvas border
+  const wrap = document.getElementById('canvas-wrap');
+  wrap.style.transition = 'box-shadow 0.1s';
+  wrap.style.boxShadow = 'inset 0 0 40px rgba(242,153,0,0.2)';
+  setTimeout(function() { wrap.style.boxShadow = ''; }, 2000);
+
+  // Overlay banner
+  const banner = document.createElement('div');
+  banner.style.cssText = 'position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:#fff;border:2px solid #f29900;border-radius:8px;color:#b06000;font-family:Google Sans,sans-serif;font-size:15px;font-weight:700;padding:24px 36px;text-align:center;z-index:200;pointer-events:none;box-shadow:0 4px 24px rgba(242,153,0,0.2);white-space:nowrap';
+  banner.innerHTML = '\u26a0\ufe0f &nbsp;Canary Triggered&nbsp; \u26a0\ufe0f<br><span style="font-size:12px;color:#5f6368;font-weight:500;font-family:monospace">' + canaryNode.label + ' &nbsp;&middot;&nbsp; ' + proto + ' &nbsp;&middot;&nbsp; Attack Halted</span>';
+  wrap.appendChild(banner);
+
+  setTimeout(function() {
+    banner.style.transition = 'opacity 0.6s';
+    banner.style.opacity = '0';
+    setTimeout(function() { banner.remove(); }, 700);
+  }, 2800);
+}
+
+function stopAll() {
+  isRunning = false;
+  if (attackTimer) { clearTimeout(attackTimer); attackTimer = null; }
+  if (replayTimer) { clearTimeout(replayTimer); replayTimer = null; }
+}
+
+// ─── Reset ────────────────────────────────────────────────────────────────────
+document.getElementById('btn-reset').addEventListener('click', () => {
+  stopAll();
+  buildNetwork();
+});
+
+// ─── Record / Replay ─────────────────────────────────────────────────────────
+function recordEvent(ev) {
+  sessionEvents.push(Object.assign({ ts: Date.now() }, ev));
+}
+
+// ─── Save ─────────────────────────────────────────────────────────────────────
+document.getElementById('btn-save').addEventListener('click', saveSession);
+
+function saveSession() {
+  if (sessionEvents.length === 0) return;
+
+  const snapshot = {
+    id: Date.now(),
+    date: new Date().toLocaleString(),
+    nodes: nodes.map(n => ({
+      id: n.id, label: n.label, isAttacker: n.isAttacker,
+      isCanary: n.isCanary, x: n.x, y: n.y
+    })),
+    links: links.map(l => ({
+      source: typeof l.source === 'object' ? l.source.id : l.source,
+      target: typeof l.target === 'object' ? l.target.id : l.target,
+      proto: l.proto || null
+    })),
+    events: sessionEvents,
+    stats: {
+      compromised: compromisedSet.size,
+      canaryHits: canaryHitSet.size,
+      moves: moveCount
+    }
+  };
+
+  saves.unshift(snapshot);
+  if (saves.length > 10) saves = saves.slice(0, 10);
+  localStorage.setItem('lm_saves', JSON.stringify(saves));
+  renderSaves();
+  addLog('Session saved: ' + snapshot.date, 'info');
+}
+
+function renderSaves() {
+  const el = document.getElementById('saves-list');
+  el.innerHTML = '';
+  saves.forEach((s, i) => {
+    const d = document.createElement('div');
+    d.className = 'save-entry';
+    d.innerHTML =
+      '<span>' + s.date + '<br><span style="color:#3a5a6a;font-size:8px">' +
+      s.stats.compromised + ' comp · ' + s.stats.canaryHits + ' canary · ' + s.stats.moves + ' moves</span></span>' +
+      '<span class="save-del" data-idx="' + i + '" title="Delete">✕</span>';
+    d.querySelector('.save-del').addEventListener('click', e => {
+      e.stopPropagation();
+      saves.splice(parseInt(e.target.dataset.idx), 1);
+      localStorage.setItem('lm_saves', JSON.stringify(saves));
+      renderSaves();
+    });
+    d.addEventListener('click', () => loadReplay(s));
+    el.appendChild(d);
+  });
+}
+
+// ─── Replay ───────────────────────────────────────────────────────────────────
+function loadReplay(snapshot) {
+  stopAll();
+  isReplay = true;
+  sessionEvents = [];
+  replayEvents = snapshot.events;
+  replayIdx = 0;
+  logEl.innerHTML = '';
+  compromisedSet.clear();
+  canaryHitSet.clear();
+  moveCount = 0;
+  updateStats();
+
+  // Reconstruct nodes/links
+  nodes = snapshot.nodes.map(n => Object.assign({}, n, { current: n.isAttacker, compromised: false }));
+  links = snapshot.links.map(l => ({ source: l.source, target: l.target, proto: null }));
+  attackerNode = nodes.find(n => n.isAttacker);
+
+  drawGraph();
+
+  // Set fixed positions
+  nodes.forEach(n => { n.fx = n.x; n.fy = n.y; });
+  simulation.alpha(0).stop();
+  ticked();
+
+  document.getElementById('replay-section').style.display = 'block';
+  document.getElementById('btn-start').disabled = true;
+  document.getElementById('btn-save').disabled = true;
+  document.getElementById('status-phase').textContent = 'REPLAY';
+  modeTag.innerHTML = '<span class="tag tag-replay">▶ REPLAY</span>';
+  addLog('Replay loaded: ' + snapshot.date + ' (' + replayEvents.length + ' events)', 'info');
+}
+
+document.getElementById('btn-replay-play').addEventListener('click', function() {
+  if (!isReplay) return;
+  isRunning = true;
+  playNextReplayEvent();
+  this.disabled = true;
+});
+
+document.getElementById('btn-replay-step').addEventListener('click', () => {
+  if (!isReplay) return;
+  isRunning = false;
+  if (replayTimer) clearTimeout(replayTimer);
+  applyReplayEvent();
+});
+
+document.getElementById('btn-replay-stop').addEventListener('click', () => {
+  isRunning = false;
+  if (replayTimer) clearTimeout(replayTimer);
+  document.getElementById('btn-replay-play').disabled = false;
+  document.getElementById('status-phase').textContent = 'REPLAY PAUSED';
+});
+
+function playNextReplayEvent() {
+  if (!isRunning || replayIdx >= replayEvents.length) {
+    isRunning = false;
+    document.getElementById('btn-replay-play').disabled = false;
+    document.getElementById('status-phase').textContent = 'REPLAY DONE';
+    return;
+  }
+  applyReplayEvent();
+  replayTimer = setTimeout(playNextReplayEvent, getSpeed());
+}
+
+function applyReplayEvent() {
+  if (replayIdx >= replayEvents.length) return;
+  const ev = replayEvents[replayIdx++];
+
+  if (ev.type === 'start') {
+    addLog('Replay: attack start', 'info');
+    document.getElementById('status-phase').textContent = 'REPLAY';
+  } else if (ev.type === 'compromise' || ev.type === 'canary') {
+    const fromNode = nodes.find(n => n.id === ev.fromId);
+    const tgtNode = nodes.find(n => n.id === ev.targetId);
+    if (!tgtNode) return;
+    moveCount = ev.step;
+
+    const link = links.find(l => {
+      const s = typeof l.source === 'object' ? l.source.id : l.source;
+      const t = typeof l.target === 'object' ? l.target.id : l.target;
+      return (s === ev.fromId && t === ev.targetId) || (s === ev.targetId && t === ev.fromId);
+    });
+    if (link) link.proto = ev.proto;
+
+    if (ev.type === 'canary') {
+      canaryHitSet.add(tgtNode.id);
+      tgtNode.lastProto = ev.proto;
+      addLog('⚠ CANARY TRIGGERED: ' + tgtNode.label + ' via ' + ev.proto, 'alert');
+      flashCanary(tgtNode);
+    } else {
+      compromisedSet.add(tgtNode.id);
+      tgtNode.lastProto = ev.proto;
+      nodes.forEach(n => n.current = false);
+      tgtNode.current = true;
+      addLog('Host ' + tgtNode.label + ' compromised via ' + ev.proto, 'compromised');
+    }
+
+    if (fromNode) animatePacket(fromNode, tgtNode, ev.proto, () => {});
+    refreshNodeVisuals();
+    refreshLinkVisuals();
+    updateStats();
+    document.getElementById('status-step').textContent =
+      'Step ' + ev.step + ': ' + (fromNode ? fromNode.label : '?') + ' → ' + tgtNode.label + ' via ' + ev.proto;
+  } else if (ev.type === 'end') {
+    addLog('Replay: attack sequence end.', 'info');
+    document.getElementById('status-phase').textContent = 'REPLAY DONE';
+    isRunning = false;
+    document.getElementById('btn-replay-play').disabled = false;
+  }
+}
+
+// ─── Init ─────────────────────────────────────────────────────────────────────
+renderSaves();
+document.getElementById('status-phase').textContent = 'IDLE';
+addLog('System ready. Configure network and build.', 'info');
+
+// Build on load for quick start
+setTimeout(buildNetwork, 300);
+</script>
+
+</body>
+</html>
